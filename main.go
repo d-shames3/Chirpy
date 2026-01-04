@@ -16,6 +16,7 @@ import (
 func main() {
 	godotenv.Load()
 	dbUrl := os.Getenv("DB_URL")
+	platform := os.Getenv("PLATFORM")
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		log.Fatal(err)
@@ -28,6 +29,7 @@ func main() {
 	cfg := apiConfig{
 		fileServerHits: atomic.Int32{},
 		db:             *dbQueries,
+		platform:       platform,
 	}
 
 	mux := http.NewServeMux()
@@ -37,8 +39,9 @@ func main() {
 	mux.Handle("/app/", cfg.middlewareMetricsInc(fileServerHandler))
 	mux.HandleFunc("GET /api/healthz", healthHandlerFunc)
 	mux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
-	mux.HandleFunc("GET /admin/metrics", cfg.fileServerMetricsHandler)
-	mux.HandleFunc("POST /admin/reset", cfg.resetMetricsHandler)
+	mux.HandleFunc("POST /api/users", cfg.createUserHandler)
+	mux.HandleFunc("GET /admin/metrics", cfg.metricsHandler)
+	mux.HandleFunc("POST /admin/reset", cfg.resetHandler)
 
 	server := &http.Server{
 		Addr:    ":" + port,
@@ -52,6 +55,7 @@ func main() {
 type apiConfig struct {
 	fileServerHits atomic.Int32
 	db             database.Queries
+	platform       string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -61,7 +65,7 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func (cfg *apiConfig) fileServerMetricsHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 	hits := cfg.fileServerHits.Load()
@@ -76,11 +80,21 @@ func (cfg *apiConfig) fileServerMetricsHandler(w http.ResponseWriter, r *http.Re
 		hits)))
 }
 
-func (cfg *apiConfig) resetMetricsHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if cfg.platform != "dev" {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	if err := cfg.db.DeleteUsers(r.Context()); err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	cfg.fileServerHits.Store(0)
-	w.Write([]byte("Reset hits to 0"))
+	w.Write([]byte("Reset hits to 0 and deleted all users"))
 }
 
 func healthHandlerFunc(w http.ResponseWriter, r *http.Request) {
