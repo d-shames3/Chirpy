@@ -29,6 +29,58 @@ const (
 	maxChars = 140
 )
 
+func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
+	chirpIdPath := r.PathValue("chirpId")
+	if chirpIdPath == "" {
+		respondWithError(w, http.StatusBadRequest, "no chirp id provided")
+		return
+	}
+
+	chirpId, err := uuid.Parse(chirpIdPath)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "chirp id is not in UUID format")
+		return
+	}
+
+	chirp, err := cfg.db.GetChirp(r.Context(), chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	chirpResponse := chirpResponse{
+		ID:        chirp.ID,
+		UserID:    chirp.UserID,
+		Body:      chirp.Body,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+	}
+
+	respondWithJSON(w, http.StatusOK, chirpResponse)
+}
+
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.db.GetChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var chirpResponses []chirpResponse
+	for _, chirp := range chirps {
+		chirpResponse := chirpResponse{
+			ID:        chirp.ID,
+			UserID:    chirp.UserID,
+			Body:      chirp.Body,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+		}
+		chirpResponses = append(chirpResponses, chirpResponse)
+	}
+
+	respondWithJSON(w, http.StatusOK, chirpResponses)
+}
+
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 	var chirp chirp
 	defer r.Body.Close()

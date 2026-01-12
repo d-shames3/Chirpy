@@ -8,3 +8,23 @@ VALUES (
     now()
 )
 RETURNING *;
+
+-- name: GetChirps :many
+SELECT
+    id,
+    user_id,
+    body,
+    created_at,
+    updated_at
+FROM chirps
+ORDER BY created_at;
+
+-- name: GetChirp :one
+SELECT
+    id,
+    user_id,
+    body,
+    created_at,
+    updated_at
+FROM chirps
+WHERE id = $1;
