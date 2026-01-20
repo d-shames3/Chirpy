@@ -17,6 +17,7 @@ func main() {
 	godotenv.Load()
 	dbUrl := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
+	serverSecret := os.Getenv("SERVER_SECRET")
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		log.Fatal(err)
@@ -30,6 +31,7 @@ func main() {
 		fileServerHits: atomic.Int32{},
 		db:             *dbQueries,
 		platform:       platform,
+		serverSecret:   serverSecret,
 	}
 
 	mux := http.NewServeMux()
@@ -59,6 +61,7 @@ type apiConfig struct {
 	fileServerHits atomic.Int32
 	db             database.Queries
 	platform       string
+	serverSecret   string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
