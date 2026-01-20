@@ -11,8 +11,9 @@ import (
 )
 
 type userParams struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
 }
 
 type userData struct {
@@ -20,6 +21,7 @@ type userData struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token,omitempty"`
 }
 
 func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -29,6 +31,14 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&userParams); err != nil {
 		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	if userParams.ExpiresInSeconds == nil {
+		defaultExpiresinSeconds := 3600
+		userParams.ExpiresInSeconds = &defaultExpiresinSeconds
+	} else if *userParams.ExpiresInSeconds > 3600 {
+		defaultExpiresinSeconds := 3600
+		userParams.ExpiresInSeconds = &defaultExpiresinSeconds
 	}
 
 	user, err := cfg.db.GetUser(r.Context(), userParams.Email)
@@ -46,15 +56,22 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if !match {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password")
 		return
-	} else {
-		userData := userData{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
-		}
-		respondWithJSON(w, http.StatusOK, userData)
 	}
+
+	authToken, err := auth.MakeJWT(user.ID, cfg.serverSecret, time.Duration(*userParams.ExpiresInSeconds)*time.Second)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userData := userData{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+		Token:     authToken,
+	}
+	respondWithJSON(w, http.StatusOK, userData)
 }
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, r *http.Request) {

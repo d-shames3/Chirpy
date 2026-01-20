@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/d-shames3/chirpy/internal/auth"
 	"github.com/d-shames3/chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
 type chirp struct {
-	Body   string    `json:"body"`
-	UserID uuid.UUID `json:"user_id"`
+	Body string `json:"body"`
 }
 
 type chirpResponse struct {
@@ -90,6 +90,17 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, cfg.serverSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+	}
+
 	validChirp, err := validateChirp(chirp)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err.Error())
@@ -97,7 +108,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	createChirpParams := database.CreateChirpParams{
-		UserID: validChirp.UserID,
+		UserID: userId,
 		Body:   validChirp.Body,
 	}
 	chirpData, err := cfg.db.CreateChirp(r.Context(), createChirpParams)
@@ -108,7 +119,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 
 	chirpResponse := chirpResponse{
 		ID:        chirpData.ID,
-		UserID:    chirp.UserID,
+		UserID:    userId,
 		Body:      chirp.Body,
 		CreatedAt: chirpData.CreatedAt,
 		UpdatedAt: chirpData.UpdatedAt,
@@ -135,7 +146,7 @@ func stripProfanity(c chirp) chirp {
 	}
 	cleanWords := strings.Join(words, " ")
 
-	cleanChirp := chirp{Body: cleanWords, UserID: c.UserID}
+	cleanChirp := chirp{Body: cleanWords}
 	return cleanChirp
 
 }
