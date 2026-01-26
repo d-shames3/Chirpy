@@ -26,6 +26,55 @@ type userData struct {
 
 const defaultExpiresinSeconds = 3600
 
+func (cfg *apiConfig) updateUserCredsHandler(w http.ResponseWriter, r *http.Request) {
+	userParams := userParams{}
+	defer r.Body.Close()
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&userParams); err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, cfg.serverSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	hashedPassword, err := auth.HashPassword(userParams.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	updateUserCredsParams := database.UpdateUserCredsParams{
+		Email:          userParams.Email,
+		HashedPassword: hashedPassword,
+		ID:             userId,
+	}
+
+	user, err := cfg.db.UpdateUserCreds(r.Context(), updateUserCredsParams)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	userData := userData{
+		ID:        user.ID,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}
+
+	respondWithJSON(w, http.StatusOK, userData)
+}
+
 func (cfg *apiConfig) revokeTokenHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
