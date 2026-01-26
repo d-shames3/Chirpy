@@ -29,6 +29,51 @@ const (
 	maxChars = 140
 )
 
+func (cfg *apiConfig) deleteChirpHandler(w http.ResponseWriter, r *http.Request) {
+	chirpIdPath := r.PathValue("chirpId")
+	if chirpIdPath == "" {
+		respondWithError(w, http.StatusBadRequest, "no chirp id provided")
+		return
+	}
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userId, err := auth.ValidateJWT(token, cfg.serverSecret)
+	if err != nil {
+		respondWithError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	chirpId, err := uuid.Parse(chirpIdPath)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "malformed chirp id")
+		return
+	}
+
+	chirp, err := cfg.db.GetChirp(r.Context(), chirpId)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if userId != chirp.UserID {
+		respondWithError(w, http.StatusForbidden, "user is not author of chirp")
+		return
+	}
+
+	if err = cfg.db.DeleteChirp(r.Context(), chirpId); err != nil {
+		respondWithError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
 	chirpIdPath := r.PathValue("chirpId")
 	if chirpIdPath == "" {
