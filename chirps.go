@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -105,10 +106,24 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
-	chirps, err := cfg.db.GetChirps(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, err.Error())
-		return
+	userIdString := r.URL.Query().Get("author_id")
+	sortKey := r.URL.Query().Get("sort")
+	var chirps []database.Chirp
+	var err error
+
+	if userIdString != "" {
+		userId, err := uuid.Parse(userIdString)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		chirps, err = cfg.db.GetChirpsByAuthor(r.Context(), userId)
+	} else {
+		chirps, err = cfg.db.GetChirps(r.Context())
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	var chirpResponses []chirpResponse
@@ -121,6 +136,12 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt: chirp.UpdatedAt,
 		}
 		chirpResponses = append(chirpResponses, chirpResponse)
+	}
+
+	if sortKey == "desc" {
+		sort.Slice(chirpResponses, func(i int, j int) bool {
+			return chirpResponses[i].CreatedAt.After(chirpResponses[j].CreatedAt)
+		})
 	}
 
 	respondWithJSON(w, http.StatusOK, chirpResponses)

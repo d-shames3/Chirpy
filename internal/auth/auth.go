@@ -13,6 +13,15 @@ import (
 	"github.com/google/uuid"
 )
 
+func GetAPIKey(headers http.Header) (string, error) {
+	rawApiKey := headers.Get("Authorization")
+	if rawApiKey == "" {
+		return "", errors.New("No Authorization header")
+	}
+
+	return strings.Replace(rawApiKey, "ApiKey ", "", 1), nil
+}
+
 func MakeRefreshToken() (string, error) {
 	key := make([]byte, 32)
 	_, err := rand.Read(key)
