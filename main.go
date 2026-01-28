@@ -18,6 +18,7 @@ func main() {
 	dbUrl := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
 	serverSecret := os.Getenv("SERVER_SECRET")
+	apiKey := os.Getenv("POLKA_KEY")
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		log.Fatal(err)
@@ -32,6 +33,7 @@ func main() {
 		db:             *dbQueries,
 		platform:       platform,
 		serverSecret:   serverSecret,
+		apiKey:         apiKey,
 	}
 
 	mux := http.NewServeMux()
@@ -49,6 +51,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", cfg.loginHandler)
 	mux.HandleFunc("POST /api/refresh", cfg.refreshTokenHandler)
 	mux.HandleFunc("POST /api/revoke", cfg.revokeTokenHandler)
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.polkaPaidUserWebhookHandler)
 	mux.HandleFunc("GET /admin/metrics", cfg.metricsHandler)
 	mux.HandleFunc("POST /admin/reset", cfg.resetHandler)
 
@@ -66,6 +69,7 @@ type apiConfig struct {
 	db             database.Queries
 	platform       string
 	serverSecret   string
+	apiKey         string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
